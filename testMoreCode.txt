@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+
+#include "list.h"
+#include "map.h"
+
+typedef char** ArgList;
+typedef void(*Method)(struct Object* obj, ArgList args);
+
+typedef struct Object {
+    Map* mathods;
+    Map* fields;
+} Object;
+
+Object create_object() {
+    Object obj = { map_new(1024), map_new(1024) };
+    return obj;
+}
+
+void bind_method(Object* obj, const char* name, Method method) {
+    map_put(obj->mathods, name, (void*)method);
+}
+
+void override_method(Object* obj, const char* name, Method method) {
+    map_set(obj->mathods, name, (void*)method);
+}
+
+Method get_method(Object* obj, const char* name) {
+    return (Method)map_get(obj->mathods, name);
+}
+
+void invoke_method(Object* obj, const char* name, ArgList args) {
+    Method method = (Method)map_get(obj->mathods, name);
+
+    if (method != NULL) {
+        method(obj, args);
+    }
+}
+
+typedef struct GameObject {
+    Object base;
+    int id;
+    const char* name;
+} GameObject;
+
+GameObject GameObject_new(int id, const char* name);
+void GameObject_validate(Object* obj, ArgList args);
+
+GameObject GameObject_new(int id, const char* name) {
+    GameObject obj = {};
+
+    obj.base = create_object();
+    obj.id = id;
+    obj.name = name;
+
+    // Bind methods
+    bind_method((Object*)&obj, "validate", GameObject_validate);
+
+    return obj;
+}
+
+void GameObject_validate(Object* obj, ArgList args) {
+    GameObject* gameObj = (GameObject*)obj;
+    printf("id=%d\nname=\"%s\"\n", gameObj->id, gameObj->name);
+}
+
+// Static mesh
+typedef struct StaticMesh {
+    GameObject base;
+    const char* meshId;
+} StaticMesh;
+
+StaticMesh StaticMesh_new(int id, const char* name, const char* meshId);
+void StaticMesh_validate(Object* obj, ArgList args);
+
+StaticMesh StaticMesh_new(int id, const char* name, const char* meshId) {
+    StaticMesh obj = {};
+
+    obj.base = GameObject_new(id, name);
+    obj.meshId = meshId;
+
+    // Bind methods
+    bind_method((Object*)&obj, "GameObject.validate", GameObject_validate);
+    override_method((Object*)&obj, "validate", StaticMesh_validate);
+
+    return obj;
+}
+
+void StaticMesh_validate(Object* obj, ArgList args) {
+    invoke_method(obj, "GameObject.validate", NULL);
+
+    StaticMesh* mesh = (StaticMesh*)obj;
+    printf("meshId=\"%s\"\n", mesh->meshId);
+}
+
+int main(int argc, char* argv[]) {
+    StaticMesh mesh = StaticMesh_new(20, "item1", "cube.obj");
+
+    // Call
+    invoke_method((Object*)&mesh, "validate", NULL);
+
+    return 0;
+}

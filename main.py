@@ -1,8 +1,8 @@
 
 symbols_keys = [
     '<<=', '>>=', '++', '--', '==', '<<', '>>', '&&', '||', '->', '::', '+=', 
-    '-=', '*=', '/=','^=', '|=', '%=', '&=', '~=', '+', '-', '*', '/', '%', '^', 
-    '|', '~', ',', '<', '>', '(', ')', '!', '.', '?', ':', '{', '}', '[', ']', '\\', ';', '"', '\'', '=', ' '
+    '-=', '*=', '/=','^=', '|=', '%=', '&=', '~=', '//', '+', '-', '*', '/', '%', '^', 
+    '|', '&', '~', ',', '<', '>', '(', ')', '!', '.', '?', ':', '{', '}', '[', ']', '\\', ';', '"', '\'', '=', '#', ' ', '\n', '\t'
 ]
 
 def get_starts_with(text, symbol, offset = 0) -> str:
@@ -17,6 +17,32 @@ def scan_for(text, symbol, offset) -> int:
             return i
         
     return -1
+
+def find_string_end(text: str, symbol, offset) -> int:
+    i = offset
+    
+    while i < len(text):
+        if text.startswith("\\\\", i):
+            print("TEST! TEST!")
+            i += 2
+            continue
+        elif text.startswith("\\" + symbol, i):
+            print(f"from {offset} to {i}")
+            i += 1 + len(symbol)
+            continue
+
+        if text.startswith(symbol, i):
+            return i
+        
+        i += 1
+        
+    return -1
+
+def is_whitespace(token) -> bool:
+    if token in [' ', '\n', '\t']:
+        return True
+    
+    return False
 
 def is_number(token) -> bool:
     for i in range(len(token)):
@@ -47,7 +73,7 @@ def tokenize(text) -> list[str]:
 
     while i < len(text):
         if text[i] == '"' or text[i] == "'":
-            end = scan_for(text, text[i], i + 1)
+            end = find_string_end(text, text[i], i + 1)
 
             if end != -1:
                 if lastToken:
@@ -58,31 +84,36 @@ def tokenize(text) -> list[str]:
                 i = end + 1
                 continue
             else:
+                print(f"\"{text[i:]}\"")
                 raise Exception(f"Forgot closing token for '{text[i]}' at index {i}")
-            
+
         skip = False
 
         for symbol in symbols_keys:
             startToken = get_starts_with(text, symbol, i)
 
+            if startToken == "\"":
+                print("INVALID-TOKEN: '\"'")
+
             if startToken:
                 if lastToken:
                     if is_number(lastToken) and startToken == '.':
-                        break
+                        continue
 
                     tokens.append(lastToken)
                     lastToken = ""
 
-                if startToken != ' ':
+                if not is_whitespace(startToken):
                     tokens.append(startToken)
 
                 i += len(startToken)
                 skip = True
+                break
 
         if skip:
             continue
 
-        if text[i] != ' ':
+        if not is_whitespace(text[i]):
             lastToken += text[i]
 
         i += 1
@@ -96,5 +127,9 @@ def tokenize(text) -> list[str]:
 if __name__ == "__main__":
     print(is_number("100.24"))
     # 10+20*3^2%3/2*t = 2, 9 + 1<2 && 2 > 3 + 2 << 2==2 if int()
-    print(get_starts_with("1<<1", "<<", 1))
-    print(tokenize("game.get() + i++ 1.0f + 10+20*3^2%3/2*t = 2, 9 + 1<2 && 2 > 3 + 2 << 2==2 if int()>>=0\"Hello, World!\"\"Hello, World!\" + i++"))
+    with open("testMoreCode.txt", "r") as file:
+        text = file.read()
+        tokens = tokenize(text)
+        print(tokens)
+
+    # print(tokenize("game.get(); +     i++ 1.0f + 10+20*3^2%3/2*t = 2, 9 + 1<2 && 2 > 3 + 2 << 2==2 if int()>>=0\"Hello, World!\"\"Hello, World!\" + i++"))
