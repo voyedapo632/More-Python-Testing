@@ -1,0 +1,17 @@
+import math
+
+var start = true
+var count = 10
+
+if start == true then
+    for var i = 0..i < count..i++ do
+        print("Hello, World! x {}", i)
+    end
+
+    var i = 0
+
+    while i < count do
+        print("Hello, World! x {}", i)
+        i++
+    end
+end
