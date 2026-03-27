@@ -27,7 +27,6 @@ def find_string_end(text: str, symbol, offset) -> int:
             i += 2
             continue
         elif text.startswith("\\" + symbol, i):
-            print(f"from {offset} to {i}")
             i += 1 + len(symbol)
             continue
 
@@ -86,6 +85,34 @@ def tokenize(text) -> list[str]:
             else:
                 print(f"\"{text[i:]}\"")
                 raise Exception(f"Forgot closing token for '{text[i]}' at index {i}")
+
+        if text.startswith("//", i) or text.startswith("#", i):
+            end = scan_for(text, "\n", i)
+
+            if end == -1:
+                end = len(text) - 1
+
+            if lastToken:
+                tokens.append(lastToken)
+                lastToken = ""
+
+            tokens.append(text[i:end])
+            i = end + 1
+            continue
+
+        if text.startswith("/*", i):
+            end = scan_for(text, "*/", i)
+
+            if end == -1:
+                end = len(text) - 1
+
+            if lastToken:
+                tokens.append(lastToken)
+                lastToken = ""
+
+            tokens.append(text[i:end + 2])
+            i = end + 2
+            continue
 
         skip = False
 
