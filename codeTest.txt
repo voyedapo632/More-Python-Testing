@@ -1,17 +1,22 @@
-import math
+#version 1.0
 
-var start = true
-var count = 10
+#define POSITION layout(0)
+#define COLOR layout(1)
 
-if start == true then
-    for var i = 0..i < count..i++ do
-        print("Hello, World! x {}", i)
-    end
+struct VertexInput {
+    var pos: vec3<f32>;
+    var col: vec3<f32>;
+};
 
-    var i = 0
+struct VertexOutput {
+    var pos: vec3<f32>;
+    var col: vec3<f32>;
+};
 
-    while i < count do
-        print("Hello, World! x {}", i)
-        i++
-    end
-end
+fn vs_main(VertexInput input) -> VertexOutput {
+    var output: VertexOutput;
+
+    output.pos = input.pos;
+    output.col = input.col;
+    return output;
+}
