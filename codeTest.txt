@@ -18,5 +18,10 @@ fn vs_main(VertexInput input) -> VertexOutput {
 
     output.pos = input.pos;
     output.col = input.col;
+
+    for (var i: int = 0; i < 10; i++) {
+        println("Hello, World! x {}", i);
+    }
+
     return output;
 }

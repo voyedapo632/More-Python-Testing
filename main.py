@@ -344,9 +344,10 @@ def create_token(token: str) -> Token:
         else:
             return Token("unknown", token)
 
-def label_tokens(tokens) -> list[Token]:
+def label_tokens(tokens: list[str]) -> list[Token]:
     newList = []
     localList = []
+    lastScope = ""
     
     for token in tokens:
         if token in ["{", "(", "["]:
@@ -360,7 +361,13 @@ def label_tokens(tokens) -> list[Token]:
             continue
 
         if token in ["}", ")", "]"]:
-            newList.append(localList.pop(len(localList) - 1))
+            lst = localList.pop(len(localList) - 1)
+
+            if localList:
+                localList[-1].value.append(lst)
+            else:
+                newList.append(lst)
+
             continue
 
         if localList:
@@ -380,8 +387,13 @@ def print_body_tokens(tokens: list[Token], scope = 0):
         if token.tokenType == "scope-body":
             print()
             print("{")
+            line_print("    " * (scope + 1))
             print_body_tokens(token.value, scope + 1)
             line_print("}")
+
+            if i + 1 < len(tokens) and tokens[i + 1].value != ";":
+                print()
+
         elif token.tokenType == "expr-body":
             line_print("(")
             print_body_tokens(token.value, scope)
@@ -396,9 +408,36 @@ def print_body_tokens(tokens: list[Token], scope = 0):
                 
             line_print(token.value)
 
+            if token.value[0] == "#":
+                print()
+
             if token.value == ";":
                 print()
-                line_print("    " * scope)
+
+                if i + 1 < len(tokens) and tokens[i + 1].value != "}":
+                    line_print("    " * scope)
+
+                if i - 1 >= 0 and tokens[i - 1].value == "}":
+                    print()
+
+
+def print_tokens(tokens: list[Token], scope = 0):
+    for token in tokens:
+        if type(token.value) == list:
+            if token.tokenType == "scope-body":
+                print("{")
+                print_tokens(token.value)
+                print("\n}")
+            elif token.tokenType == "expr-body":
+                line_print("(")
+                print_tokens(token.value)
+                line_print(")")
+            elif token.tokenType == "list-body":
+                line_print("[")
+                print_tokens(token.value)
+                line_print("]")
+        else:
+            line_print(token.value)
 
 if __name__ == "__main__":
     print(is_number("100.24"))
@@ -413,6 +452,13 @@ if __name__ == "__main__":
     with open("codeTest.txt", "r") as file:
         text = file.read()
         tokens = label_tokens((tokenize(text)))
-        print_body_tokens(tokens)
+
+        # for token in tokens:
+        #     if type(token.value) == list:
+        #         print_tokens(token.value)
+        #     else:
+        #         print(token)
+        print_tokens(tokens)
+        # print_body_tokens(tokens)
 
     # print(tokenize("game.get(); +     i++ 1.0f + 10+20*3^2%3/2*t = 2, 9 + 1<2 && 2 > 3 + 2 << 2==2 if int()>>=0\"Hello, World!\"\"Hello, World!\" + i++"))
