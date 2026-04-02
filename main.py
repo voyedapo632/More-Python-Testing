@@ -420,24 +420,48 @@ def print_body_tokens(tokens: list[Token], scope = 0):
                 if i - 1 >= 0 and tokens[i - 1].value == "}":
                     print()
 
+def print_tokens(tokens: list[Token], scope = 0, single_line = False):
+    for i in range(len(tokens)):
+        token = tokens[i]
 
-def print_tokens(tokens: list[Token], scope = 0):
-    for token in tokens:
         if type(token.value) == list:
             if token.tokenType == "scope-body":
+                print()
+                line_print("    " * scope)
                 print("{")
-                print_tokens(token.value)
-                print("\n}")
+                line_print("    " * (scope + 1))
+                print_tokens(token.value, scope + 1)
+                print()
+                line_print("    " * scope)
+                line_print("}")
+                
+                if i + 1 < len(tokens) and tokens[i + 1].value != ";":
+                    print()
+
+                line_print("    " * scope)
             elif token.tokenType == "expr-body":
                 line_print("(")
-                print_tokens(token.value)
+                print_tokens(token.value, single_line = True)
                 line_print(")")
             elif token.tokenType == "list-body":
                 line_print("[")
-                print_tokens(token.value)
+                print_tokens(token.value, single_line = True)
                 line_print("]")
-        else:
+        elif type(token.value) == str:
+            if i > 0 and type(tokens[i - 1].value) == str:
+                if tokens[i - 1].value in [":", ","] or (is_key_word(tokens[i - 1].value) and is_key_word(token.value)):
+                    line_print(" ")
+                
             line_print(token.value)
+
+            if token.value.startswith("#"):
+                print()
+
+            if token.value == ";" and i + 1 < len(tokens) and tokens[i + 1] != "}" and not single_line:
+                print()
+                
+                if i + 1 < len(tokens) and tokens[i + 1].value != "}":
+                    line_print("    " * scope)
 
 if __name__ == "__main__":
     print(is_number("100.24"))
