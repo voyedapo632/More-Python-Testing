@@ -323,6 +323,9 @@ class Token:
         self.tokenType = tokenType
         self.value = value
 
+    def __str__(self):
+        return f"{self.tokenType}: {str(self.value)}"
+
 def create_token(token: str) -> Token:
     if token in symbols_keys:
         return Token(list(_symbols_keys.keys())[list(symbols_keys).index(token)], token)
@@ -473,15 +476,21 @@ if __name__ == "__main__":
     #     for token in tokens:
     #         print(token)
 
+    text = "10 + 5 * 5 / 2"
+    tokens = label_tokens((tokenize(text)))
+    operator_stack = []
+    operand_stack = []
+
+    for token in tokens:
+        print(str(token))
+
+    # print_tokens(tokens)
+    exit()
+
     with open("codeTest.txt", "r") as file:
         text = file.read()
         tokens = label_tokens((tokenize(text)))
 
-        # for token in tokens:
-        #     if type(token.value) == list:
-        #         print_tokens(token.value)
-        #     else:
-        #         print(token)
         print_tokens(tokens)
         # print_body_tokens(tokens)
 
