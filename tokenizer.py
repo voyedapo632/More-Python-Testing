@@ -1,4 +1,3 @@
-
 class TokenInfo:
     def __init__(self, typeName: str, value: str, keep = True):
         self.typeName = typeName
@@ -75,8 +74,20 @@ class Tokenizer:
 class ExprTokenizer(Tokenizer):
     def __init__(self):
         super().__init__([
+            TokenInfo("operator", "<<="),
+            TokenInfo("operator", ">>="),
+            TokenInfo("operator", "+="),
+            TokenInfo("operator", "-="),
+            TokenInfo("operator", "*="),
+            TokenInfo("operator", "/="),
             TokenInfo("operator", "<<"),
             TokenInfo("operator", ">>"),
+            TokenInfo("operator", "&&"),
+            TokenInfo("operator", "||"),
+            TokenInfo("operator", "<="),
+            TokenInfo("operator", ">="),
+            TokenInfo("operator", "=="),
+            TokenInfo("operator", "!="),
             TokenInfo("operator", "+"),
             TokenInfo("operator", "-"),
             TokenInfo("operator", "*"),
@@ -85,12 +96,15 @@ class ExprTokenizer(Tokenizer):
             TokenInfo("operator", "&"),
             TokenInfo("operator", "^"),
             TokenInfo("operator", "|"),
+            TokenInfo("operator", "<"),
+            TokenInfo("operator", ">"),
             TokenInfo("open-expr", "("),
             TokenInfo("close-expr", ")"),
             TokenInfo("open-list", "["),
             TokenInfo("close-list", "]"),
             TokenInfo("open-body", "{"),
             TokenInfo("close-body", "}"),
+            TokenInfo("type-hint", ":"),
             TokenInfo("big-string", "\""),
             TokenInfo("little-string", "'"),
             TokenInfo("operator", " ", keep = False),
@@ -98,6 +112,28 @@ class ExprTokenizer(Tokenizer):
             TokenInfo("operator", "\n", keep = False)
         ])
 
+    def tokenize(self, text):
+        tokens = super().tokenize_txt(text)
+        newTokens = []
+        scopeTokens = []
+
+        for token in tokens:
+            if token.get_value() == "(":
+                scopeTokens.append(Token("sub-expression", []))
+            elif token.get_value() == ")":
+                lastToken = scopeTokens.pop()
+
+                if scopeTokens:
+                    scopeTokens[-1].get_value().append(lastToken)
+                else:
+                    newTokens.append(lastToken)
+            else:
+                if scopeTokens:
+                    scopeTokens[-1].get_value().append(token)
+                else:
+                    newTokens.append(token)
+
+        return newTokens
 
     def get_end_of(self, text: str, delimiter: TokenInfo, offset: int) -> int:
         if delimiter.value == "\"":
@@ -157,11 +193,13 @@ class ExprTokenizer(Tokenizer):
 
 
 class ExprEvaluator:
-    def __init__(self):
-        pass
+    def __init__(self, stack: list[dict]):
+        self.stack = stack
 
 
-    def eval_token_list(self, t: list[Token]) -> Token:
+    def eval_token_list(self, _tokens: list[Token]) -> Token:
+        tokens = [token for token in _tokens]
+
         levels = [
             {
                 "direction": "right",
@@ -180,7 +218,17 @@ class ExprEvaluator:
 
             { "direction": "right", "operators": ["&"] },
             { "direction": "right", "operators": ["^"] },
-            { "direction": "right", "operators": ["|"] }
+            { "direction": "right", "operators": ["|"] },
+
+            { "direction": "right", "operators": ["<", ">", "<=", ">=", "==", "!="] },
+
+            { "direction": "right", "operators": ["&&"] },
+
+            { "direction": "right", "operators": ["||"] },
+
+            { "direction": "left", "operators": ["+=", "-="] },
+
+            { "direction": "left", "operators": ["*=", "/="] },
         ]
 
         for level in levels:
@@ -207,7 +255,28 @@ class ExprEvaluator:
         return self.eval_token(tokens[0])
 
 
+    def set_var(self, identifier: str, value: Token):
+        for i in range(len(self.stack) - 1, -1, -1):
+            if identifier in self.stack[i]:
+                self.stack[i][identifier] = value
+                return
+            
+        raise Exception(f"Identifier '{identifier}' no found")
+
+    
+    def get_var(self, identifier: str) -> Token:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if identifier in self.stack[i]:
+                return self.stack[i][identifier]
+            
+        raise Exception(f"Identifier '{identifier}' no found")
+    
+
     def eval_token(self, token: Token) -> Token:
+        if token.get_type() == "identifier":
+            value = self.get_var(token.get_value())
+            return Token(value.get_type(), value.get_value())
+
         return token
 
 
@@ -217,6 +286,18 @@ class ExprEvaluator:
                 return self.add(self.eval_token(left), self.eval_token(right))
             case "-":
                 return self.sub(self.eval_token(left), self.eval_token(right))
+            case "+=":
+                self.set_var(left.get_value(), self.add(self.eval_token(left), self.eval_token(right)))
+                return self.get_var(left.value)
+            case "-=":
+                self.set_var(left.get_value(), self.sub(self.eval_token(left), self.eval_token(right)))
+                return self.get_var(left.value)
+            case "*=":
+                self.set_var(left.get_value(), self.mul(self.eval_token(left), self.eval_token(right)))
+                return self.get_var(left.value)
+            case "/=":
+                self.set_var(left.get_value(), self.div(self.eval_token(left), self.eval_token(right)))
+                return self.get_var(left.value)
             case "*":
                 return self.mul(self.eval_token(left), self.eval_token(right))
             case "/":
@@ -233,7 +314,24 @@ class ExprEvaluator:
                 return self.bwxor(self.eval_token(left), self.eval_token(right))
             case "|":
                 return self.bwor(self.eval_token(left), self.eval_token(right))
+            case "||":
+                return self.logical_or(self.eval_token(left), self.eval_token(right))
+            case "&&":
+                return self.logical_and(self.eval_token(left), self.eval_token(right))
+            case "<":
+                return self.less_than(self.eval_token(left), self.eval_token(right))
+            case "<=":
+                return self.less_than_or_eql(self.eval_token(left), self.eval_token(right))
+            case ">":
+                return self.greater_than(self.eval_token(left), self.eval_token(right))
+            case ">=":
+                return self.greater_than_or_eql(self.eval_token(left), self.eval_token(right))
+            case "==":
+                return self.eql_to(self.eval_token(left), self.eval_token(right))
+            case "!=":
+                return self.not_eql_to(self.eval_token(left), self.eval_token(right))
             
+
         return Token("none-type", "NULL")
 
 
@@ -306,45 +404,285 @@ class ExprEvaluator:
     def div(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long", "float", "double"])
         higher_type = self.higher_type_cast(left, right)
-        return Token(higher_type, self.make_value(higher_type, self.parse_value(left) / self.parse_value(right)))
+        result = self.parse_value(left) / self.parse_value(right)
+
+        if left.get_type() in ["int", "long"] and right.get_type() in ["int", "long"]:
+            result = int(result)
+
+        return Token(higher_type, self.make_value(higher_type, result))
 
 
     def lshift(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) << self.parse_value(right.value))
+        return Token("int", self.parse_value(left) << self.parse_value(right))
     
     
     def mod(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) % self.parse_value(right.value))
+        return Token("int", self.parse_value(left) % self.parse_value(right))
     
 
     def bwand(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) & self.parse_value(right.value))
+        return Token("int", self.parse_value(left) & self.parse_value(right))
     
     
     def bwxor(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) ^ self.parse_value(right.value))
+        return Token("int", self.parse_value(left) ^ self.parse_value(right))
     
 
     def bwor(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) | self.parse_value(right.value))
+        return Token("int", self.parse_value(left) | self.parse_value(right))
 
 
     def rshift(self, left: Token, right: Token) -> Token:
         self.validate_operators(left, right, ["int", "long"])
-        return Token("int", self.parse_value(left.value) >> self.parse_value(right.value))
+        return Token("int", self.parse_value(left) >> self.parse_value(right))
 
+
+    def logical_or(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) >= 1 or self.parse_value(right) >= 1))
+    
+
+    def logical_and(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) >= 1 and self.parse_value(right) >= 1))
+    
+
+    def less_than(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) < self.parse_value(right)))
+    
+
+    def less_than_or_eql(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) <= self.parse_value(right)))
+    
+
+    def greater_than(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) + self.parse_value(right)))
+    
+
+    def greater_than_or_eql(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) >= self.parse_value(right)))
+    
+
+    def eql_to(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) == self.parse_value(right)))
+    
+
+    def not_eql_to(self, left: Token, right: Token) -> Token:
+        self.validate_operators(left, right, ["int", "long", "float", "double"])
+        return Token("int", int(self.parse_value(left) != self.parse_value(right)))
+
+class CodeLine:
+    def __init__(self, lineType: str, tokens: list[Token], lineNumber: int):
+        self.lineType = lineType
+        self.tokens = tokens
+        self.lineNumber = lineNumber
+        self.linkNumber = lineNumber
+
+class Program:
+    def __init__(self, path):
+        with open(path, "r") as file:
+            self.source = file.read()
+
+        self.var_stack: list[dict] = [{}]
+        self.evaluator = ExprEvaluator(self.var_stack)
+        self.tokenizer = ExprTokenizer()
+        self.lines: list[CodeLine] = []
+        count = 0
+        block_stack = []
+
+        for line in self.source.split("\n"):
+            if not line:
+                continue
+
+            tokens = self.tokenizer.tokenize_txt(line)
+
+            if not tokens:
+                continue
+
+            if tokens[0].get_value() == "#":
+                continue
+
+            if tokens[0].get_value() == "var":
+                self.lines.append(CodeLine("var", tokens, count))
+                count += 1
+            elif tokens[0].get_value() == "if":
+                self.lines.append(CodeLine("if", tokens, count))
+                block_stack.append("if")
+                count += 1
+            elif tokens[0].get_value() == "while":
+                self.lines.append(CodeLine("while", tokens, count))
+                block_stack.append("while")
+                count += 1
+            elif tokens[0].get_value() == "end":
+                last = block_stack.pop()
+
+                if last == "if":
+                    self.lines.append(CodeLine("endif", tokens, count))
+                elif last == "while":
+                    self.lines.append(CodeLine("endwhile", tokens, count))
+
+                count += 1
+            elif tokens[0].get_value() == "print":
+                self.lines.append(CodeLine("print", tokens, count))
+                count += 1
+            else:
+                self.lines.append(CodeLine("expression", tokens, count))
+                count += 1
+
+        stack = []
+
+        for i in range(len(self.lines)):
+            if self.lines[i].lineType in ["if", "while"]:
+                stack.append(i)
+            elif self.lines[i].lineType in ["endif", "endwhile"]:
+                last_line = stack.pop()
+                self.lines[last_line].linkNumber = i
+                self.lines[i].linkNumber = last_line
+
+
+    def run(self):
+        i = 0
+
+        while i < len(self.lines):
+            line = self.lines[i]
+
+            match line.lineType:
+                case "expression":
+                    self.evaluator.eval_token_list(line.tokens).get_value()
+                case "print":
+                    print(self.evaluator.eval_token_list(line.tokens[1:]).get_value())
+                case "var":
+                    self.var_stack[-1][line.tokens[1].get_value()] = self.evaluator.eval_token_list(line.tokens[3:])
+                case "if":
+                    value = self.evaluator.eval_token_list(line.tokens[1:-1])
+
+                    if not self.evaluator.parse_value(value) >= 1:
+                        i = line.linkNumber + 1
+                        continue
+
+                    self.var_stack.append({})
+                case "endif":
+                    self.var_stack.pop()
+                case "while":
+                    value = self.evaluator.eval_token_list(line.tokens[1:-1])
+
+                    if not self.evaluator.parse_value(value) >= 1:
+                        i = line.linkNumber + 1
+                        continue
+
+                    self.var_stack.append({})
+                case "endwhile":
+                    i = line.linkNumber
+                    self.var_stack.pop()
+                    continue
+                
+
+            i += 1
+
+
+def printExpr(tokens: list[Token]):
+    for token in tokens:
+        if type(token.get_value()) == list:
+            print("(")
+            printExpr(token.get_value())
+            print(")")
+        else:
+            print(token)
+
+def get_order(token: str) -> int:
+    match token:
+        case "+":
+            return 1
+        case "-":
+            return 1
+        case "*":
+            return 2
+        case "/":
+            return 2
+        case "^":
+            return 3
+
+def is_op(value: str) -> bool:
+    return value in "+-*/^"
 
 if __name__ == "__main__":
+    # 10 + 40 + 20 * 3 ^ 5 + 30
+    tokens = "10 + 40 + 20 * 3 ^ 5 + 30".split()
+    
+    op_stack = []
+    result = []
+
+    for token in tokens:
+        if is_op(token):
+            if op_stack:
+                while get_order(token) <= get_order(op_stack[-1]):
+                    result.append(op_stack.pop())
+
+                    if not op_stack:
+                        break
+                
+            op_stack.append(token)
+        else:
+            result.append(token)
+
+    while op_stack:
+        result.append(op_stack.pop())
+
+    print(f"Result: {result}")
+
+    stack = []
+
+    for token in result:
+        if is_op(token):
+            right = stack.pop()
+            left = stack.pop()
+
+            match token:
+                case "+":
+                    stack.append(left + right)
+                case "-":
+                    stack.append(left - right)
+                case "*":
+                    stack.append(left * right)
+                case "/":
+                    stack.append(left / right)
+                case "^":
+                    stack.append(left ** right)
+        else:
+            stack.append(int(token))
+
+    final_result = stack.pop()
+    print(final_result)
+
     tokenizer = ExprTokenizer()
-    tokens = tokenizer.tokenize_txt("10 + 30.4 + 454.0f + 43.2 + 20")
+    text = "10 + 20 + (3 * 42 + (4 * 5 + (345 * 3)) + 33) + (43 * 343)"
+
+    #tokens = tokenizer.tokenize(text)
+
+    # printExpr(tokens)
+
+    program = Program("program.txt")
+    #program.run()
+    
+    # for line in program.lines:
+    #     print(f"{line.lineNumber}: {line.lineType} {[token.get_value() for token in line.tokens]} link={line.linkNumber}")
+
+    # tokenizer = ExprTokenizer()
+    # tokens = tokenizer.tokenize_txt("10 + 30.4 + 454.0f + 43.2 + 20")
+    # tokens = tokenizer.tokenize_txt("5 * 2 < 20 && 5 * 2 > 5 * 1")
     # for token in tokens: print(token)
 
-    evaluator = ExprEvaluator()
-    result = evaluator.eval_token_list(tokens)
-    print(result)
+    # evaluator = ExprEvaluator()
+    # result = evaluator.eval_token_list(tokens)
+    # print(result)
     #print(30 + 500 * 10 + 20 + 30)

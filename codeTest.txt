@@ -1,3 +1,30 @@
+10 + 30.4 + 454.0f + 43.2 + 20
+
+var count = 16 / 4
+
+count += 4
+
+if 10 < 20 then
+    count + 20
+endif
+
+while count < 10 do
+    if 10 then
+        if 10 then
+            print "Test!"
+        endif
+    endif
+
+    while count < 10 do
+        while count < 10 do
+            print "Hello, World!"
+        endwhile
+    endwhile
+endwhile
+
+
+
+
 #version 1.0
 
 #define POSITION layout(0)

@@ -1,0 +1,23 @@
+# function loopPrint(msg, count)
+#     var i = 0
+# 
+#     while i < count then
+#         print msg
+#         i += 2
+#     end
+# end
+
+# loopPrint("Hello, World!")
+
+var i = 1
+
+# A simple loop
+while i <= 10 then
+    print i
+    i += 2
+end
+
+
+
+
+
